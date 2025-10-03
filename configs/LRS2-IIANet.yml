@@ -68,10 +68,10 @@ datamodule:
     sample_rate: 16000
     segment: 2.0
     normalize_audio: false
-    batch_size: 3
+    batch_size: 2
     num_workers: 24
     pin_memory: true
     persistent_workers: false
   
 exp:
-  exp_name: LRS2-IIANet
+  exp_name: LRS2-IIANet-qzh-train
