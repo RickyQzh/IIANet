@@ -42,6 +42,11 @@ parser.add_argument(
     default="local/conf.yml",
     help="Full path to save best validation model",
 )
+parser.add_argument(
+    "--use_precomputed_embeddings",
+    action="store_true",
+    help="Use precomputed video embeddings to accelerate training",
+)
 
 def main(config):
     print_only(
@@ -159,7 +164,7 @@ def main(config):
         default_root_dir=exp_dir,
         devices=gpus,
         accelerator=distributed_backend,
-        strategy=DDPStrategy(find_unused_parameters=True),
+        strategy=DDPStrategy(find_unused_parameters=False),
         limit_train_batches=1.0,  # Useful for fast experiment
         gradient_clip_val=5.0,
         logger=comet_logger,
@@ -192,6 +197,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open(args.conf_dir) as f:
         def_conf = yaml.safe_load(f)
+    
+    # 如果命令行指定了use_precomputed_embeddings，覆盖配置文件中的设置
+    if args.use_precomputed_embeddings:
+        def_conf['datamodule']['data_config']['use_precomputed_embeddings'] = True
+    
     parser = prepare_parser_from_dict(def_conf, parser=parser)
 
     arg_dic, plain_args = parse_args_as_dict(parser, return_plain_args=True)

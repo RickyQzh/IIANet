@@ -56,6 +56,8 @@ class AudioVisualLightningModule(pl.LightningModule):
         self.test_loader = test_loader
         self.scheduler = scheduler
         self.config = {} if config is None else config
+        # 检查是否使用预提取的embeddings
+        self.use_precomputed_embeddings = self.config.get('datamodule', {}).get('data_config', {}).get('use_precomputed_embeddings', False)
         # Save lightning"s AttributeDict under self.hparams
         self.default_monitor = "val_loss/dataloader_idx_0"
         self.save_hyperparameters(self.config_to_hparams(self.config))
@@ -69,10 +71,15 @@ class AudioVisualLightningModule(pl.LightningModule):
         Returns:
             :class:`torch.Tensor`
         """
-        if mouth.ndim == 4:
-            mouth = mouth.unsqueeze(1)
-        with torch.no_grad():
-            mouth_emb = self.video_model(mouth.type_as(wav))
+        # 如果使用预提取的embeddings，mouth已经是编码后的特征
+        if self.use_precomputed_embeddings:
+            mouth_emb = mouth.type_as(wav)
+        else:
+            # 否则需要通过video_model编码
+            if mouth.ndim == 4:
+                mouth = mouth.unsqueeze(1)
+            with torch.no_grad():
+                mouth_emb = self.video_model(mouth.type_as(wav))
         return self.audio_model(wav, mouth_emb)
 
     def training_step(self, batch, batch_nb):

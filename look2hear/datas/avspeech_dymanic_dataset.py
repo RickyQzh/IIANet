@@ -35,7 +35,8 @@ class AVSpeechDataset(Dataset):
         sample_rate: int = 8000,
         segment: float = 4.0,
         normalize_audio: bool = False,
-        is_train: bool = True
+        is_train: bool = True,
+        use_precomputed_embeddings: bool = False
     ):
         super().__init__()
         if json_dir == None:
@@ -45,10 +46,12 @@ class AVSpeechDataset(Dataset):
         self.json_dir = json_dir
         self.sample_rate = sample_rate
         self.normalize_audio = normalize_audio
+        self.use_precomputed_embeddings = use_precomputed_embeddings
         self.lipreading_preprocessing_func = get_preprocessing_pipelines()[
             "train" if is_train else "val"
         ]
         print("lipreading_preprocessing_func: ", self.lipreading_preprocessing_func)
+        print("use_precomputed_embeddings: ", self.use_precomputed_embeddings)
         if segment is None:
             self.seg_len = None
             self.fps_len = None
@@ -143,9 +146,21 @@ class AVSpeechDataset(Dataset):
             source = sf.read(
                 self.sources[idx][0], start=rand_start, stop=stop, dtype="float32"
             )[0]
-            source_mouth = self.lipreading_preprocessing_func(
-                np.load(self.sources[idx][1])["data"]
-            )[:, : self.fps_len]
+            
+            # 加载视频特征或预提取的embedding
+            if self.use_precomputed_embeddings:
+                embedding_path = self.sources[idx][1].replace('.npz', '_embedding.npz')
+                if os.path.exists(embedding_path):
+                    source_mouth = torch.from_numpy(np.load(embedding_path)["embedding"])
+                else:
+                    # 如果embedding文件不存在，回退到原始方法
+                    source_mouth = self.lipreading_preprocessing_func(
+                        np.load(self.sources[idx][1])["data"]
+                    )[:, : self.fps_len]
+            else:
+                source_mouth = self.lipreading_preprocessing_func(
+                    np.load(self.sources[idx][1])["data"]
+                )[:, : self.fps_len]
 
             source = torch.from_numpy(source)
             mixture = torch.from_numpy(mix_source)
@@ -172,15 +187,33 @@ class AVSpeechDataset(Dataset):
                 sources.append(
                     sf.read(src[0], start=rand_start, stop=stop, dtype="float32")[0]
                 )
-            # import pdb; pdb.set_trace()
-            sources_mouths = torch.stack(
-                [
-                    torch.from_numpy(
-                        self.lipreading_preprocessing_func(np.load(src[1])["data"])
-                    )
-                    for src in self.sources[idx]
-                ]
-            )[:, : self.fps_len]
+            
+            # 加载视频特征或预提取的embedding
+            if self.use_precomputed_embeddings:
+                sources_mouths_list = []
+                for src in self.sources[idx]:
+                    embedding_path = src[1].replace('.npz', '_embedding.npz')
+                    if os.path.exists(embedding_path):
+                        sources_mouths_list.append(
+                            torch.from_numpy(np.load(embedding_path)["embedding"])
+                        )
+                    else:
+                        # 如果embedding文件不存在，回退到原始方法
+                        sources_mouths_list.append(
+                            torch.from_numpy(
+                                self.lipreading_preprocessing_func(np.load(src[1])["data"])
+                            )
+                        )
+                sources_mouths = torch.stack(sources_mouths_list)
+            else:
+                sources_mouths = torch.stack(
+                    [
+                        torch.from_numpy(
+                            self.lipreading_preprocessing_func(np.load(src[1])["data"])
+                        )
+                        for src in self.sources[idx]
+                    ]
+                )[:, : self.fps_len]
             # import pdb; pdb.set_trace()
             sources = torch.stack([torch.from_numpy(source) for source in sources])
             mixture = torch.from_numpy(mix_source)
@@ -200,7 +233,8 @@ class AVSpeechDynamicDataset(Dataset):
         sample_rate: int = 8000,
         segment: float = 4.0,
         normalize_audio: bool = False,
-        is_train: bool = True
+        is_train: bool = True,
+        use_precomputed_embeddings: bool = False
     ):
         super().__init__()
         if json_dir == None:
@@ -210,10 +244,12 @@ class AVSpeechDynamicDataset(Dataset):
         self.json_dir = json_dir
         self.sample_rate = sample_rate
         self.normalize_audio = normalize_audio
+        self.use_precomputed_embeddings = use_precomputed_embeddings
         self.lipreading_preprocessing_func = get_preprocessing_pipelines()[
             "train" if is_train else "val"
         ]
         print("lipreading_preprocessing_func: ", self.lipreading_preprocessing_func)
+        print("use_precomputed_embeddings: ", self.use_precomputed_embeddings)
         if segment is None:
             self.seg_len = None
             self.fps_len = None
@@ -329,13 +365,31 @@ class AVSpeechDynamicDataset(Dataset):
             s2_json[0], start=rand_start, stop=stop, dtype="float32"
         )[0]
         
-        s1_mouth = self.lipreading_preprocessing_func(
-            np.load(s1_json[1])["data"]
-        )[:, : self.fps_len]
-        
-        s2_mouth = self.lipreading_preprocessing_func(
-            np.load(s2_json[1])["data"]
-        )[:, : self.fps_len]
+        # 加载视频特征或预提取的embedding
+        if self.use_precomputed_embeddings:
+            embedding_path_s1 = s1_json[1].replace('.npz', '_embedding.npz')
+            if os.path.exists(embedding_path_s1):
+                s1_mouth = torch.from_numpy(np.load(embedding_path_s1)["embedding"])
+            else:
+                s1_mouth = self.lipreading_preprocessing_func(
+                    np.load(s1_json[1])["data"]
+                )[:, : self.fps_len]
+            
+            embedding_path_s2 = s2_json[1].replace('.npz', '_embedding.npz')
+            if os.path.exists(embedding_path_s2):
+                s2_mouth = torch.from_numpy(np.load(embedding_path_s2)["embedding"])
+            else:
+                s2_mouth = self.lipreading_preprocessing_func(
+                    np.load(s2_json[1])["data"]
+                )[:, : self.fps_len]
+        else:
+            s1_mouth = self.lipreading_preprocessing_func(
+                np.load(s1_json[1])["data"]
+            )[:, : self.fps_len]
+            
+            s2_mouth = self.lipreading_preprocessing_func(
+                np.load(s2_json[1])["data"]
+            )[:, : self.fps_len]
         
         sources_json = [s1_json, s2_json]
         mouths = [s1_mouth, s2_mouth]
@@ -366,6 +420,7 @@ class AVSpeechDyanmicDataModule(object):
         num_workers: int = 0,
         pin_memory: bool = False,
         persistent_workers: bool = False,
+        use_precomputed_embeddings: bool = False,
     ) -> None:
         super().__init__()
         if train_dir == None or valid_dir == None or test_dir == None:
@@ -385,6 +440,7 @@ class AVSpeechDyanmicDataModule(object):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.persistent_workers = persistent_workers
+        self.use_precomputed_embeddings = use_precomputed_embeddings
 
         self.data_train: Dataset = None
         self.data_val: Dataset = None
@@ -397,7 +453,8 @@ class AVSpeechDyanmicDataModule(object):
             sample_rate = self.sample_rate,
             segment = self.segment,
             normalize_audio = self.normalize_audio,
-            is_train=True
+            is_train=True,
+            use_precomputed_embeddings=self.use_precomputed_embeddings
         )
         self.data_val = AVSpeechDataset(
             json_dir = self.valid_dir,
@@ -405,7 +462,8 @@ class AVSpeechDyanmicDataModule(object):
             sample_rate = self.sample_rate,
             segment = self.segment,
             normalize_audio = self.normalize_audio,
-            is_train=False
+            is_train=False,
+            use_precomputed_embeddings=self.use_precomputed_embeddings
         )
         self.data_test = AVSpeechDataset(
             json_dir = self.test_dir,
@@ -413,7 +471,8 @@ class AVSpeechDyanmicDataModule(object):
             sample_rate = self.sample_rate,
             segment = self.segment,
             normalize_audio = self.normalize_audio,
-            is_train=False
+            is_train=False,
+            use_precomputed_embeddings=self.use_precomputed_embeddings
         )
 
     def train_dataloader(self) -> DataLoader:

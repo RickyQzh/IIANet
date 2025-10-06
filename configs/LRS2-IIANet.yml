@@ -68,10 +68,11 @@ datamodule:
     sample_rate: 16000
     segment: 2.0
     normalize_audio: false
-    batch_size: 2
+    batch_size: 5
     num_workers: 24
     pin_memory: true
     persistent_workers: false
+    use_precomputed_embeddings: false  # 设置为true以使用预提取的视频特征
   
 exp:
-  exp_name: LRS2-IIANet-qzh-train
+  exp_name: LRS2-IIANet-qzh-L20-test
